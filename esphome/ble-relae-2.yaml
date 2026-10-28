@@ -6,3 +6,4 @@ packages:
   lt_8d05: !include { file: lt-sensor.yaml, vars: { mac: "D5:85:47:C7:8D:05", sid: lt_8d05, offset: 10s } }
   lt_b112: !include { file: lt-sensor.yaml, vars: { mac: "F0:8F:09:55:B1:12", sid: lt_b112, offset: 70s } }
   lt_b10f: !include { file: lt-sensor.yaml, vars: { mac: "E4:83:48:2F:B1:0F", sid: lt_b10f, offset: 130s } }
+  lt_b20e: !include { file: lt-sensor.yaml, vars: { mac: "F0:B9:6A:D2:B2:0E", sid: lt_b20e, offset: 190s } }

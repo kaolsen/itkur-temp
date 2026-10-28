@@ -45,7 +45,7 @@ binary_sensor:
       inverted: true
     name: "Knap"
 
-# Relæ 1 har 4 målere (Fyrrum, Soveværelse, Gæsteværelse, Bryggers), relæ 2 har 3.
+# Relæ 1 har 4 målere (Fyrrum, Soveværelse, Gæsteværelse, Bryggers), relæ 2 har 4 (Stue, Køkken, Badeværelse, Kontor).
 # Forbindelserne er korte og forskudt, så der sjældent er mere end én ad gangen.
 esp32_ble:
   max_connections: 4
