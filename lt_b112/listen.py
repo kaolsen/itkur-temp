@@ -214,34 +214,32 @@ async def read_battery(sensor, client):
 # Én kort forbindelse
 # ---------------------------------------------------------
 
-def fjern_trusted(address):
-    """Er måleren 'Trusted' i BlueZ, forbinder bluetoothd selv til den og holder
-    forbindelsen (måleren holder op med at advertise og batteriet drænes).
-    Fjern markeringen før hver runde."""
+def rens_bluez(address):
+    """Fjern måleren helt fra BlueZ før hver forbindelse.
+
+    - Er den 'Trusted', auto-forbinder bluetoothd og holder forbindelsen.
+    - Har BlueZ den i cachen fra en tidligere forbindelse (GATT-cache), giver
+      næste forbindelse timeout. Kun første forbindelse efter 'remove' virker.
+    'remove' rydder begge dele; scanningen bagefter finder den igen.
+    """
     try:
-        info = subprocess.run(["bluetoothctl", "info", address],
-                              capture_output=True, text=True, timeout=10).stdout
-        if "Trusted: yes" in info:
-            subprocess.run(["bluetoothctl", "untrust", address],
-                           capture_output=True, timeout=10)
-            print(f"{address}: var Trusted i BlueZ – fjernet")
-        if "Connected: yes" in info:
-            subprocess.run(["bluetoothctl", "disconnect", address],
-                           capture_output=True, timeout=15)
-            print(f"{address}: hængende BlueZ-forbindelse afbrudt")
+        r = subprocess.run(["bluetoothctl", "remove", address],
+                           capture_output=True, text=True, timeout=15)
+        if "removed" in r.stdout:
+            print(f"{address}: fjernet fra BlueZ-cache")
     except Exception as e:
-        print(f"{address}: kunne ikke tjekke BlueZ-status: {fejltekst(e)}")
+        print(f"{address}: kunne ikke rydde BlueZ-cache: {fejltekst(e)}")
 
 
 async def aflaes_en(sensor):
     """Forbind, læs batteri, vent på én frame, afbryd. Returnerer True ved kontakt."""
 
     address = sensor["mac_address"].upper()
-    await asyncio.to_thread(fjern_trusted, address)
 
     for forsoeg in range(1, FORSOEG + 1):
 
         start = time.monotonic()
+        await asyncio.to_thread(rens_bluez, address)
 
         try:
             device = await BleakScanner.find_device_by_address(
