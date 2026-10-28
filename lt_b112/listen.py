@@ -22,21 +22,15 @@ def db_config(profil="lt_b112"):
 
 DB_CONFIG = db_config()
 
-# Hvor ofte vi scanner efter sensorer, som ikke er forbundet
-SCAN_INTERVAL = 15
-
-# Hvor længe hver scanning varer
-SCAN_TIME = 10
-
-# Timeout for selve forbindelsen inkl. GATT-gennemgang (sekunder).
-# Var 20 s; første forbindelse på en ny installation kan tage længere.
-CONNECT_TIMEOUT = 40.0
-
-# Pause mellem scanning og forbindelse, så BlueZ har stoppet discovery
-SCAN_SETTLE = 2
-
-# Hvor ofte batteriniveauet læses (sekunder)
-BATTERY_INTERVAL = 900
+# Kort forbindelse: hver måler forbindes én gang pr. runde, batteriet læses,
+# vi venter på én FFE8-frame og afbryder. Permanent forbindelse holdt målerens
+# radio vågen døgnet rundt og drænede batteriet.
+RUNDE_INTERVAL = 600      # sekunder mellem runder (10 min, som relæerne)
+SCAN_TIME = 15            # hvor længe vi leder efter én måler
+CONNECT_TIMEOUT = 40.0    # forbindelse inkl. GATT-gennemgang
+FRAME_TIMEOUT = 45.0      # hvor længe vi venter på en FFE8-frame
+FORSOEG = 3               # forbindelsesforsøg pr. måler pr. runde
+SCAN_SETTLE = 2           # pause mellem scanning og forbindelse (BlueZ/CYW43455)
 
 
 def fejltekst(e):
@@ -216,300 +210,93 @@ async def read_battery(sensor, client):
 
 
 # ---------------------------------------------------------
-# Én Bluetooth-forbindelse
+# Én kort forbindelse
 # ---------------------------------------------------------
 
-async def sensor_connection(sensor, device, states):
+async def aflaes_en(sensor):
+    """Forbind, læs batteri, vent på én frame, afbryd. Returnerer True ved kontakt."""
 
     address = sensor["mac_address"].upper()
-    start = time.monotonic()
 
-    try:
+    for forsoeg in range(1, FORSOEG + 1):
 
-        # Lad BlueZ afslutte discovery helt, før vi forbinder.
-        # Pi'ens CYW43455 er upålidelig, hvis de to overlapper.
-        await asyncio.sleep(SCAN_SETTLE)
-
-        print(
-            f"{sensor['name']}: "
-            f"forbinder til {device.address}..."
-        )
-
-        async with BleakClient(
-            device,
-            timeout=CONNECT_TIMEOUT
-        ) as client:
-
-            states[address]["connected"] = True
-
-            print(
-                f"{sensor['name']}: FORBUNDET "
-                f"efter {time.monotonic() - start:.1f} s"
-            )
-
-            def received(sender, data, sensor=sensor):
-
-                asyncio.create_task(
-                    process_measurement(
-                        sensor,
-                        bytes(data)
-                    )
-                )
-
-            await client.start_notify(
-                FFE8,
-                received
-            )
-
-            print(
-                f"{sensor['name']}: lytter..."
-            )
-
-            # Batteri læses straks efter forbindelse og derefter hvert BATTERY_INTERVAL
-            next_battery = 0
-
-            while client.is_connected:
-
-                if time.monotonic() >= next_battery:
-
-                    await read_battery(sensor, client)
-
-                    next_battery = (
-                        time.monotonic() + BATTERY_INTERVAL
-                    )
-
-                await asyncio.sleep(2)
-
-            print(
-                f"{sensor['name']}: "
-                "forbindelsen blev afbrudt"
-            )
-
-    except asyncio.CancelledError:
-        raise
-
-    except Exception as e:
-
-        print(
-            f"{sensor['name']}: Bluetooth-fejl efter "
-            f"{time.monotonic() - start:.1f} s:",
-            fejltekst(e)
-        )
-
-        # Fuld traceback kun ved uventede fejl, ikke ved timeout
-        if not isinstance(e, (TimeoutError, asyncio.TimeoutError)):
-            traceback.print_exc()
-
-    finally:
-
-        states[address]["connected"] = False
-        states[address]["task"] = None
-
-        print(
-            f"{sensor['name']}: "
-            "markeret som ikke forbundet"
-        )
-
-
-# ---------------------------------------------------------
-# Fælles scanner/reconnect-manager
-# ---------------------------------------------------------
-
-async def connection_manager(sensors):
-
-    sensor_by_address = {
-        sensor["mac_address"].upper(): sensor
-        for sensor in sensors
-    }
-
-    states = {}
-
-    for address in sensor_by_address:
-
-        states[address] = {
-            "connected": False,
-            "task": None
-        }
-
-    while True:
-
-        #
-        # Find sensorer, som mangler forbindelse
-        #
-
-        missing = [
-            address
-            for address in sensor_by_address
-            if not states[address]["connected"]
-            and states[address]["task"] is None
-        ]
-
-        if not missing:
-
-            # Alle er forbundet eller ved at forbinde
-            await asyncio.sleep(5)
-            continue
-
-        #
-        # Scan ikke, mens en anden sensor er midt i at forbinde.
-        # Discovery og connect samtidig får forbindelsen til at hænge.
-        #
-
-        connecting = [
-            address
-            for address in sensor_by_address
-            if states[address]["task"] is not None
-            and not states[address]["connected"]
-        ]
-
-        if connecting:
-            await asyncio.sleep(2)
-            continue
-
-        print()
-        print(
-            "Scanner efter ikke-forbundne sensorer:"
-        )
-
-        for address in missing:
-
-            sensor = sensor_by_address[address]
-
-            print(
-                f"  {sensor['name']:<12} "
-                f"{sensor['bluetooth_name']:<10} "
-                f"{address}"
-            )
+        start = time.monotonic()
 
         try:
-
-            devices = await BleakScanner.discover(
-                timeout=SCAN_TIME,
-                return_adv=True
+            device = await BleakScanner.find_device_by_address(
+                address, timeout=SCAN_TIME
             )
-
-        except Exception as e:
-
-            print(
-                "Fejl under BLE-scanning:",
-                fejltekst(e)
-            )
-
-            await asyncio.sleep(
-                SCAN_INTERVAL
-            )
-
-            continue
-
-        #
-        # Se om de manglende sensorer blev fundet
-        #
-
-        found_addresses = set()
-
-        for address, result in devices.items():
-
-            device, advertisement = result
-
-            device_address = (
-                device.address.upper()
-            )
-
-            if device_address not in missing:
+            if device is None:
+                print(f"{sensor['name']}: ikke fundet (forsøg {forsoeg}/{FORSOEG})")
                 continue
 
-            sensor = sensor_by_address[
-                device_address
-            ]
+            await asyncio.sleep(SCAN_SETTLE)
 
-            found_addresses.add(
-                device_address
-            )
+            async with BleakClient(device, timeout=CONNECT_TIMEOUT) as client:
 
+                print(f"{sensor['name']}: forbundet efter {time.monotonic() - start:.1f} s")
+
+                frame = asyncio.get_running_loop().create_future()
+
+                def received(sender, data):
+                    if not frame.done():
+                        frame.set_result(bytes(data))
+
+                await client.start_notify(FFE8, received)
+                await read_battery(sensor, client)
+
+                try:
+                    data = await asyncio.wait_for(frame, FRAME_TIMEOUT)
+                    await process_measurement(sensor, data)
+                except asyncio.TimeoutError:
+                    print(f"{sensor['name']}: ingen ændring inden for {FRAME_TIMEOUT:.0f} s")
+
+            print(f"{sensor['name']}: afbrudt efter {time.monotonic() - start:.1f} s")
+            return True
+
+        except asyncio.CancelledError:
+            raise
+
+        except Exception as e:
             print(
-                f"FUNDET: "
-                f"{sensor['name']:<12} "
-                f"{device.name or '?':<10} "
-                f"{device.address} "
-                f"RSSI {advertisement.rssi}"
+                f"{sensor['name']}: Bluetooth-fejl (forsøg {forsoeg}/{FORSOEG}) efter "
+                f"{time.monotonic() - start:.1f} s: {fejltekst(e)}"
             )
+            if not isinstance(e, (TimeoutError, asyncio.TimeoutError)):
+                traceback.print_exc()
+            await asyncio.sleep(3)
 
-            #
-            # Start separat forbindelse.
-            # Scanningen er afsluttet her, og der startes
-            # ingen ny, før forbindelsen er etableret eller fejlet.
-            #
-
-            task = asyncio.create_task(
-                sensor_connection(
-                    sensor,
-                    device,
-                    states
-                )
-            )
-
-            states[device_address]["task"] = task
-
-        #
-        # Vis hvilke vi ikke fandt
-        #
-
-        for address in missing:
-
-            if address not in found_addresses:
-
-                sensor = sensor_by_address[
-                    address
-                ]
-
-                print(
-                    f"{sensor['name']}: "
-                    "ikke fundet"
-                )
-
-        await asyncio.sleep(
-            SCAN_INTERVAL
-        )
+    return False
 
 
 # ---------------------------------------------------------
-# Main
+# Main: én runde hvert RUNDE_INTERVAL
 # ---------------------------------------------------------
 
 async def main():
 
-    sensors = await asyncio.to_thread(
-        get_sensors
-    )
+    while True:
 
-    if not sensors:
+        runde_start = time.monotonic()
 
-        print(
-            "Ingen aktive Raspberry Pi-sensorer "
-            "fundet i databasen."
-        )
+        try:
+            sensors = await asyncio.to_thread(get_sensors)   # genindlæs hver runde
+        except Exception as e:
+            print("Kan ikke hente sensorer:", fejltekst(e))
+            sensors = []
 
-        return
+        if not sensors:
+            print("Ingen aktive Raspberry Pi-sensorer i databasen.")
 
-    print()
-    print(
-        f"Starter LT-overvågning af "
-        f"{len(sensors)} sensor(er)"
-    )
+        print()
+        print(datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+              f"runde: {', '.join(s['name'] for s in sensors)}")
 
-    for sensor in sensors:
+        for sensor in sensors:          # én ad gangen – Pi'ens Bluetooth kan ikke mere
+            await aflaes_en(sensor)
 
-        print(
-            f"  {sensor['name']:<12} "
-            f"{sensor['bluetooth_name']:<10} "
-            f"{sensor['mac_address']}"
-        )
-
-    print()
-
-    await connection_manager(
-        sensors
-    )
+        pause = RUNDE_INTERVAL - (time.monotonic() - runde_start)
+        await asyncio.sleep(max(pause, 30))
 
 
 # ---------------------------------------------------------

@@ -379,7 +379,7 @@ Begge scripts gemmer **hver** notifikation i `measurements` (målerne sender kun
 
 - Kører med venv: `/home/kao/lt_b112/venv/bin/python`.
 - Henter målere fra `sensors` ved **opstart**. Genstart servicen efter ændring af `gateway`.
-- Scanner hvert 15. sek. efter ikke-forbundne målere, forbinder, abonnerer på `FFE8` og læser batteri (`2A19`) straks og derefter hvert 15. min.
+- Kører en runde hvert 10. minut (fra 28. okt 2026): for hver måler med `gateway = 'raspberrypi'` scannes efter den, der forbindes, batteriet (`2A19`) læses, og der ventes højst 45 s på én `FFE8`-frame, før forbindelsen afbrydes. Op til 3 forsøg pr. måler pr. runde. Sensorlisten genindlæses hver runde.
 
 `/etc/systemd/system/ble-pi.service`:
 
