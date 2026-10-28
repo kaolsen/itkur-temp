@@ -53,6 +53,7 @@ LT-måler (Kontor) ──BLE──▶ Pi'ens Bluetooth ────────�
 - **Målerne sender kun, når værdien ændrer sig.** Der kan gå 10–30 minutter mellem målinger i et rum med stabil temperatur. Det er normalt.
 - **Relæerne bruger kort forbindelse (fra 28. okt 2026).** Hver måler forbindes hvert 10. minut, batteriet læses, relæet venter på én `FFE8`-frame (højst 45 s) og afbryder. Permanent forbindelse fik måleren til at sende ca. hvert 10. sekund døgnet rundt og drænede batteriet. Målerne på samme relæ er forskudt 60 s (`offset` i `ble-relae-X.yaml`).
 - **Livstegn = batterilæsning.** Relæerne læser batteriet ved hver forbindelse, dvs. hvert 10. minut. `sensors.battery_at` er derfor den reelle indikator for, om måleren kan nås.
+- **BlueZ' input/hog-plugin er slået fra på piprod.** Målerne annoncerer HID-servicen `0x1812`, så BlueZ ellers behandler dem som tastaturer: markerer dem `Trusted`, auto-forbinder og holder forbindelsen. Override: `systemd/bluetooth.service.d/noinput.conf`.
 - **Målere må ikke være `Trusted` i BlueZ.** Så forbinder bluetoothd selv til dem og holder forbindelsen, måleren advertiser ikke, `listen.py` melder "ikke fundet", og batteriet drænes. `listen.py` fjerner markeringen før hver forbindelse. Manuelt: `bluetoothctl untrust <MAC>` og `bluetoothctl remove <MAC>`.
 - **Batteriprocenten er ubrugelig.** Målerne melder fast 90 % via `2A19`, også med nye batterier. Svage batterier viser sig i stedet som mislykkede forbindelser (`battery_at` bliver gammel).
 
