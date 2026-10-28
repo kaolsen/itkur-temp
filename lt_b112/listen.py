@@ -1,5 +1,6 @@
 import asyncio
 import configparser
+import subprocess
 import time
 import traceback
 from datetime import datetime
@@ -213,10 +214,30 @@ async def read_battery(sensor, client):
 # Én kort forbindelse
 # ---------------------------------------------------------
 
+def fjern_trusted(address):
+    """Er måleren 'Trusted' i BlueZ, forbinder bluetoothd selv til den og holder
+    forbindelsen (måleren holder op med at advertise og batteriet drænes).
+    Fjern markeringen før hver runde."""
+    try:
+        info = subprocess.run(["bluetoothctl", "info", address],
+                              capture_output=True, text=True, timeout=10).stdout
+        if "Trusted: yes" in info:
+            subprocess.run(["bluetoothctl", "untrust", address],
+                           capture_output=True, timeout=10)
+            print(f"{address}: var Trusted i BlueZ – fjernet")
+        if "Connected: yes" in info:
+            subprocess.run(["bluetoothctl", "disconnect", address],
+                           capture_output=True, timeout=15)
+            print(f"{address}: hængende BlueZ-forbindelse afbrudt")
+    except Exception as e:
+        print(f"{address}: kunne ikke tjekke BlueZ-status: {fejltekst(e)}")
+
+
 async def aflaes_en(sensor):
     """Forbind, læs batteri, vent på én frame, afbryd. Returnerer True ved kontakt."""
 
     address = sensor["mac_address"].upper()
+    await asyncio.to_thread(fjern_trusted, address)
 
     for forsoeg in range(1, FORSOEG + 1):
 
