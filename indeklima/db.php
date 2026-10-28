@@ -103,7 +103,7 @@ function hent_maalere(): array
                           WHERE sensor_id = s.id
                           ORDER BY measured_at DESC LIMIT 1)
         WHERE s.active = 1
-        ORDER BY s.name";
+        ORDER BY s.sortering, s.name";
 
     $rows = db()->query($sql)->fetchAll();
 

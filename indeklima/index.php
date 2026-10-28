@@ -31,7 +31,7 @@ $antal_problemer =
       count(array_filter($maalere, fn($m) => $m['status'] !== 'ok'))
     + count(array_filter($alle_vejr, fn($v) => $v['status'] !== 'ok'));
 
-// Statustabellen sorteres på gateway og derefter navn (kortene beholder navnesortering)
+// Statustabellen sorteres på gateway og derefter navn (kortene følger sensors.sortering)
 $status_liste = $maalere;
 usort($status_liste, fn($a, $b) =>
     [$a['gateway'], $a['name']] <=> [$b['gateway'], $b['name']]);

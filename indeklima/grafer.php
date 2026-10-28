@@ -11,7 +11,7 @@ if (!isset($valg[$timer])) {
 
 try {
     $rum = db()->query(
-        "SELECT id, name, location FROM sensors WHERE active = 1 ORDER BY name"
+        "SELECT id, name, location FROM sensors WHERE active = 1 ORDER BY sortering, name"
     )->fetchAll();
     $fejl = null;
 } catch (Throwable $e) {

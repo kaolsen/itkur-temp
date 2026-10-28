@@ -566,6 +566,14 @@ Require ip 192.168.1.0/24
 3. Hvis gatewayen er et relæ: tilføj en `!include`-linje i `ble-relae-X.yaml` (højst 3 pr. relæ, medmindre `max_connections` hæves). Tilføj også MAC'en til statistiklisten i `ble-common.yaml`, og flash.
 4. Hvis gatewayen er `raspberrypi`: `sudo systemctl restart ble-pi`.
 
+### Rækkefølge på siden
+
+Kortene på `itkur.dk/indeklima` (og målervælgeren under Grafer) sorteres på `sensors.sortering` og derefter navn. Lavt tal først; startværdierne er 10, 20, 30 … så der er plads til at indsætte imellem.
+
+```sql
+UPDATE sensors SET sortering = 5 WHERE name = 'Stue';   -- flyt Stue forrest
+```
+
 ### Flyt en måler til en anden gateway
 
 1. `UPDATE sensors SET gateway = '...' WHERE mac_address = '...';`

@@ -20,7 +20,7 @@ try {
         $sensors = $stmt->fetchAll();
     } else {
         $sensors = db()->query(
-            "SELECT id, name FROM sensors WHERE active = 1 ORDER BY name"
+            "SELECT id, name FROM sensors WHERE active = 1 ORDER BY sortering, name"
         )->fetchAll();
     }
 
