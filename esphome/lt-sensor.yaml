@@ -1,11 +1,31 @@
+# LT_-måler med kort forbindelse: forbind hvert 10. min, læs batteri, vent på én
+# FFE8-frame, afbryd. Permanent forbindelse holdt målerens radio vågen døgnet rundt
+# (notification ca. hvert 10. sek) og drænede batteriet.
+#
+# vars: mac, sid, offset (forskyd målerne på samme relæ, så de ikke forbindes samtidig)
+
 ble_client:
   - mac_address: ${mac}
     id: ${sid}
+    auto_connect: false
+    on_connect:
+      then:
+        - delay: 2s
+        - component.update: ${sid}_batt     # livstegn: opdaterer sensors.battery_at
+        - delay: 45s                         # sikkerhedsnet hvis ingen frame kommer
+        - ble_client.disconnect: ${sid}
+
+interval:
+  - interval: 10min
+    startup_delay: ${offset}
+    then:
+      - ble_client.connect: ${sid}
 
 sensor:
   - platform: ble_client
     type: characteristic
     ble_client_id: ${sid}
+    id: ${sid}_temp
     name: "${sid} temperatur"
     service_uuid: "FFE5"
     characteristic_uuid: "FFE8"
@@ -19,14 +39,19 @@ sensor:
       std::string p = "{\"mac\":\"${mac}\",\"gw\":\"${name}\",\"raw\":\"" + format_hex(x) + "\"}";
       id(mqtt_client).publish("ble/${name}/lt", p);
       return ((x[5] << 8) | x[6]) / 10.0f;
+    on_value:
+      then:
+        - delay: 1s                          # giv batterilæsningen tid til at blive færdig
+        - ble_client.disconnect: ${sid}      # første frame modtaget → afbryd
 
   - platform: ble_client
     type: characteristic
     ble_client_id: ${sid}
+    id: ${sid}_batt
     name: "${sid} batteri"
     service_uuid: "180F"
     characteristic_uuid: "2A19"
-    update_interval: 15min
+    update_interval: never                  # læses ved hver forbindelse (on_connect)
     unit_of_measurement: "%"
     accuracy_decimals: 0
     lambda: |-
@@ -34,4 +59,3 @@ sensor:
       std::string p = "{\"mac\":\"${mac}\",\"gw\":\"${name}\",\"battery\":" + std::to_string(x[0]) + "}";
       id(mqtt_client).publish("ble/${name}/batt", p);
       return (float) x[0];
-

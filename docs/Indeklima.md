@@ -51,7 +51,9 @@ LT-måler (Kontor) ──BLE──▶ Pi'ens Bluetooth ────────�
 - **Målerne sender ikke data i advertisements.** En gateway skal *forbinde* til måleren og abonnere på notifikationer på karakteristikken `FFE8`.
 - **En måler kan kun have én forbindelse ad gangen.** Derfor er hver måler tildelt præcis én gateway i kolonnen `sensors.gateway`, og relæernes YAML skal stemme overens med den.
 - **Målerne sender kun, når værdien ændrer sig.** Der kan gå 10–30 minutter mellem målinger i et rum med stabil temperatur. Det er normalt.
-- **Livstegn = batterilæsning.** Batteriet læses hvert 15. minut over den eksisterende forbindelse. `sensors.battery_at` er derfor den reelle indikator for, om forbindelsen er oppe.
+- **Relæerne bruger kort forbindelse (fra 28. okt 2026).** Hver måler forbindes hvert 10. minut, batteriet læses, relæet venter på én `FFE8`-frame (højst 45 s) og afbryder. Permanent forbindelse fik måleren til at sende ca. hvert 10. sekund døgnet rundt og drænede batteriet. Målerne på samme relæ er forskudt 60 s (`offset` i `ble-relae-X.yaml`).
+- **Livstegn = batterilæsning.** Relæerne læser batteriet ved hver forbindelse, dvs. hvert 10. minut. `sensors.battery_at` er derfor den reelle indikator for, om måleren kan nås.
+- **Batteriprocenten er ubrugelig.** Målerne melder fast 90 % via `2A19`, også med nye batterier. Svage batterier viser sig i stedet som mislykkede forbindelser (`battery_at` bliver gammel).
 
 ---
 
@@ -349,7 +351,7 @@ allow_anonymous true
 | Topic | Afsender | Payload |
 |---|---|---|
 | `ble/<relæ>/lt` | relæ, ved hver notifikation | `{"mac":"E2:FC:33:72:22:0C","gw":"ble-relae-1","raw":"aaaaa2...55"}` |
-| `ble/<relæ>/batt` | relæ, hvert 15. min | `{"mac":"E2:FC:33:72:22:0C","gw":"ble-relae-1","battery":90}` |
+| `ble/<relæ>/batt` | relæ, hvert 10. min | `{"mac":"E2:FC:33:72:22:0C","gw":"ble-relae-1","battery":90}` |
 | `<relæ>/status` | ESPHome | `online` / `offline` |
 | `<relæ>/sensor/...` | ESPHome | ESPHome's egne sensor-states (ikke brugt) |
 

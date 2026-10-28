@@ -3,7 +3,7 @@ substitutions:
 
 packages:
   common: !include ble-common.yaml
-  lt_3d06: !include { file: lt-sensor.yaml, vars: { mac: "F3:0F:F1:C5:3D:06", sid: lt_3d06 } }
-  lt_8105: !include { file: lt-sensor.yaml, vars: { mac: "D7:2A:AA:90:81:05", sid: lt_8105 } }
-  lt_220c: !include { file: lt-sensor.yaml, vars: { mac: "E2:FC:33:72:22:0C", sid: lt_220c } }
-  lt_bd0a: !include { file: lt-sensor.yaml, vars: { mac: "DA:BD:DB:25:BD:0A", sid: lt_bd0a } }
+  lt_3d06: !include { file: lt-sensor.yaml, vars: { mac: "F3:0F:F1:C5:3D:06", sid: lt_3d06, offset: 10s } }
+  lt_8105: !include { file: lt-sensor.yaml, vars: { mac: "D7:2A:AA:90:81:05", sid: lt_8105, offset: 70s } }
+  lt_220c: !include { file: lt-sensor.yaml, vars: { mac: "E2:FC:33:72:22:0C", sid: lt_220c, offset: 130s } }
+  lt_bd0a: !include { file: lt-sensor.yaml, vars: { mac: "DA:BD:DB:25:BD:0A", sid: lt_bd0a, offset: 190s } }

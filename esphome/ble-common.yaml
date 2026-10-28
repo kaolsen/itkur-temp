@@ -45,7 +45,8 @@ binary_sensor:
       inverted: true
     name: "Knap"
 
-# Relæ 1 har 4 målere (Fyrrum, Soveværelse, Gæsteværelse, Bryggers)
+# Relæ 1 har 4 målere (Fyrrum, Soveværelse, Gæsteværelse, Bryggers), relæ 2 har 3.
+# Forbindelserne er korte og forskudt, så der sjældent er mere end én ad gangen.
 esp32_ble:
   max_connections: 4
 
@@ -62,6 +63,7 @@ esp32_ble_tracker:
         - D7:2A:AA:90:81:05   # Soveværelse
         - F3:0F:F1:C5:3D:06   # Gæsteværelse
         - DA:BD:DB:25:BD:0A   # Bryggers
+        - E4:83:48:2F:B1:0F   # LT_B10F (ny, relæ 2)
       then:
         - lambda: |-
             static std::map<std::string, std::pair<int,int>> s;
