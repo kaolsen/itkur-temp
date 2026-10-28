@@ -1,0 +1,6 @@
+; Uddrag til /etc/itkur/db.ini – bruges af ble-mqtt og lt_b112 (kører som kao).
+; Filen findes allerede med [vejradmin]; tilføj blot denne sektion.
+[lt_b112]
+host = localhost
+user = lt_b112
+password = NYT_PASSWORD

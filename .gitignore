@@ -1,0 +1,15 @@
+# Hemmeligheder – må aldrig i git
+esphome/secrets.yaml
+*.ini
+!config/*.ini.example
+
+# Byggefiler, virtuelle miljøer og cache
+esphome/.esphome/
+venv/
+__pycache__/
+*.pyc
+
+# Logfiler og backups
+*.log
+*.log.*
+*.bak

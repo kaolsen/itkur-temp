@@ -1,0 +1,9 @@
+; /etc/itkur/indeklima-web.ini – læses af indeklima/db.php (kører som www-data).
+; Ejer root:www-data, rettigheder 640.
+[lt_b112]
+user = lt_b112
+password = NYT_PASSWORD
+
+[web_laes]
+user = web_laes
+password = LÆSE_PASSWORD

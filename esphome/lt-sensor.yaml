@@ -1,0 +1,37 @@
+ble_client:
+  - mac_address: ${mac}
+    id: ${sid}
+
+sensor:
+  - platform: ble_client
+    type: characteristic
+    ble_client_id: ${sid}
+    name: "${sid} temperatur"
+    service_uuid: "FFE5"
+    characteristic_uuid: "FFE8"
+    notify: true
+    update_interval: never
+    unit_of_measurement: "°C"
+    accuracy_decimals: 1
+    lambda: |-
+      if (x.size() < 13 || x[0] != 0xAA || x[1] != 0xAA || x[2] != 0xA2 || x.back() != 0x55)
+        return NAN;
+      std::string p = "{\"mac\":\"${mac}\",\"gw\":\"${name}\",\"raw\":\"" + format_hex(x) + "\"}";
+      id(mqtt_client).publish("ble/${name}/lt", p);
+      return ((x[5] << 8) | x[6]) / 10.0f;
+
+  - platform: ble_client
+    type: characteristic
+    ble_client_id: ${sid}
+    name: "${sid} batteri"
+    service_uuid: "180F"
+    characteristic_uuid: "2A19"
+    update_interval: 15min
+    unit_of_measurement: "%"
+    accuracy_decimals: 0
+    lambda: |-
+      if (x.empty()) return NAN;
+      std::string p = "{\"mac\":\"${mac}\",\"gw\":\"${name}\",\"battery\":" + std::to_string(x[0]) + "}";
+      id(mqtt_client).publish("ble/${name}/batt", p);
+      return (float) x[0];
+

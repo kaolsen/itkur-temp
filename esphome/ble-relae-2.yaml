@@ -1,0 +1,7 @@
+substitutions:
+  name: ble-relae-2
+
+packages:
+  common: !include ble-common.yaml
+  lt_8d05: !include { file: lt-sensor.yaml, vars: { mac: "D5:85:47:C7:8D:05", sid: lt_8d05 } }
+  lt_b112: !include { file: lt-sensor.yaml, vars: { mac: "F0:8F:09:55:B1:12", sid: lt_b112 } }

@@ -1,0 +1,15 @@
+[Unit]
+Description=BLE-målere via Pi'ens Bluetooth (temperatur og fugtighed)
+After=bluetooth.target mariadb.service
+Wants=bluetooth.target
+
+[Service]
+Type=simple
+User=kao
+WorkingDirectory=/var/www/itkur-temp/lt_b112
+ExecStart=/var/www/itkur-temp/lt_b112/venv/bin/python -u /var/www/itkur-temp/lt_b112/listen.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

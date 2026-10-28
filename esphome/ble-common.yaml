@@ -1,0 +1,90 @@
+esphome:
+  name: ${name}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  flash_size: 8MB
+  framework:
+    type: esp-idf        # anbefalet til BLE – bruger mindre RAM end Arduino
+
+logger:
+  hardware_uart: USB_SERIAL_JTAG   # AtomS3 har native USB
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+api:
+  encryption:
+    key: !secret api_key
+  reboot_timeout: 0s   # ingen Home Assistant – ellers genstart hvert 15. min
+
+mqtt:
+  id: mqtt_client
+  broker: 192.168.1.209
+  discovery: false
+  log_topic: null
+
+light:
+  - platform: esp32_rmt_led_strip
+    id: status_led
+    pin: GPIO35
+    chipset: WS2812
+    num_leds: 1
+    channel_colors: GRB
+    name: "Status LED"
+
+binary_sensor:
+  - platform: gpio
+    pin:
+      number: GPIO41
+      inverted: true
+    name: "Knap"
+
+# Relæ 1 har 4 målere (Fyrrum, Soveværelse, Gæsteværelse, Bryggers)
+esp32_ble:
+  max_connections: 4
+
+esp32_ble_tracker:
+  scan_parameters:
+    active: true
+  on_ble_advertise:
+    # 1) Minutstatistik (pakker/min og snit-RSSI) for kendte målere
+    - mac_address:
+        - F0:8F:09:55:B1:12   # Køkken
+        - F0:B9:6A:D2:B2:0E   # Kontor
+        - E2:FC:33:72:22:0C   # Fyrrum
+        - D5:85:47:C7:8D:05   # Stue
+        - D7:2A:AA:90:81:05   # Soveværelse
+        - F3:0F:F1:C5:3D:06   # Gæsteværelse
+        - DA:BD:DB:25:BD:0A   # Bryggers
+      then:
+        - lambda: |-
+            static std::map<std::string, std::pair<int,int>> s;
+            static uint32_t last = millis();
+            auto &e = s[x.get_name().empty() ? x.address_str() : x.get_name()];
+            e.first++;
+            e.second += x.get_rssi();
+            if (millis() - last > 60000) {
+              for (auto &kv : s)
+                ESP_LOGI("stat", "%-18s pakker/min=%3d  snit RSSI=%d",
+                         kv.first.c_str(), kv.second.first,
+                         kv.second.second / kv.second.first);
+              ESP_LOGI("stat", "----------");
+              s.clear();
+              last = millis();
+            }
+
+    # 2) Log alle LT_-målere én gang efter opstart (finder nye målere)
+    - then:
+        - lambda: |-
+            static std::map<std::string, bool> seen;
+            std::string n = x.get_name();
+            if (n.rfind("LT_", 0) == 0 && seen.emplace(x.address_str(), true).second) {
+              ESP_LOGI("ny", "Fundet: %-8s  %s  RSSI=%d",
+                       n.c_str(), x.address_str().c_str(), x.get_rssi());
+            }

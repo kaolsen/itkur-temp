@@ -1,0 +1,15 @@
+[Unit]
+Description=BLE-målere via ESP32-relæer (MQTT til MariaDB)
+After=network-online.target mosquitto.service mariadb.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kao
+WorkingDirectory=/var/www/itkur-temp/ble-mqtt
+ExecStart=/usr/bin/python3 -u /var/www/itkur-temp/ble-mqtt/ble_mqtt.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
