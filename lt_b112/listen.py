@@ -28,7 +28,7 @@ DB_CONFIG = db_config()
 # radio vågen døgnet rundt og drænede batteriet.
 RUNDE_INTERVAL = 600      # sekunder mellem runder (10 min, som relæerne)
 SCAN_TIME = 15            # hvor længe vi leder efter én måler
-CONNECT_TIMEOUT = 40.0    # forbindelse inkl. GATT-gennemgang
+CONNECT_TIMEOUT = 75.0    # forbindelse inkl. GATT-gennemgang (Pi-forbindelser tager ofte 30–45 s)
 FRAME_TIMEOUT = 45.0      # hvor længe vi venter på en FFE8-frame
 FORSOEG = 3               # forbindelsesforsøg pr. måler pr. runde
 SCAN_SETTLE = 2           # pause mellem scanning og forbindelse (BlueZ/CYW43455)
