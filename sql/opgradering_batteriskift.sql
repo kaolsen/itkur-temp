@@ -1,7 +1,7 @@
 -- Batteriskift: én række pr. skift, så siden kan vise seneste skift og hvor
 -- længe det forrige batteri holdt. Dækker alle målere:
 --   lt:<sensors.id>   LT_-målerne (BLE)
---   nexus:<kanal>     Nexus-termometrene på vejrstationen
+--   (Nexus-termometrene registreres automatisk via radio_id, se radio_sensor_trin1.sql)
 --   vevor             Vevor-udedelen
 -- Kør én gang:  sudo mysql environment < /var/www/itkur-temp/sql/opgradering_batteriskift.sql
 

@@ -42,7 +42,17 @@ foreach ($maalere as $m) {
     $batterier[] = ['noegle' => 'lt:' . (int)$m['id'], 'navn' => $m['name'], 'type' => $m['bluetooth_name'] ?: 'LT'];
 }
 foreach ($vejr['rum'] as $r) {
-    $batterier[] = ['noegle' => 'nexus:' . (int)$r['kanal'], 'navn' => $r['placering'], 'type' => 'Nexus kanal ' . (int)$r['kanal']];
+    $noegle = 'radio:' . (int)$r['sensor_id'];
+    $batterier[] = ['noegle' => $noegle, 'navn' => $r['placering'],
+                    'type' => 'Nexus kanal ' . (int)$r['kanal'] . ' · id ' . (int)$r['enhed_id'], 'auto' => true];
+    // Nexus: batteriskift = hvornår målerens nuværende radio-ID startede (radio_id-tabellen)
+    if (!empty($r['batteri_fra'])) {
+        $skift[$noegle] = [
+            'seneste' => substr($r['batteri_fra'], 0, 10),
+            'forrige' => $r['forrige_fra'] ? substr($r['forrige_fra'], 0, 10) : null,
+            'antal'   => 1,
+        ];
+    }
 }
 if ($ude) {
     $batterier[] = ['noegle' => 'vevor', 'navn' => 'Ude', 'type' => 'Vevor udedel'];
@@ -155,7 +165,7 @@ $RUMSIDE = '/temperatur/rum_temperatur.php';
           <span>Målt <?= siden($r['min_siden']) ?></span>
           <?php if ($r['enhed_id'] !== null): ?><span>id <?= (int)$r['enhed_id'] ?></span><?php endif; ?>
         </div>
-        <?php if ($t = batteri_tekst($skift, 'nexus:' . (int)$r['kanal'], $idag)): ?><div class="bat-alder"><?= h($t) ?></div><?php endif; ?>
+        <?php if ($t = batteri_tekst($skift, 'radio:' . (int)$r['sensor_id'], $idag)): ?><div class="bat-alder"><?= h($t) ?></div><?php endif; ?>
 
         <?php if ($r['status'] === 'ukendt'): ?>
           <div class="advarsel">Ingen målinger fra kendte ID'er</div>
@@ -165,7 +175,7 @@ $RUMSIDE = '/temperatur/rum_temperatur.php';
           <div class="advarsel">🔋 Lavt batteri</div>
         <?php endif; ?>
         <?php foreach ($r['ukendte'] as $id): ?>
-          <div class="advarsel">⚠ Ukendt ID <?= (int)$id ?> – registrér det på rumsiden</div>
+          <div class="advarsel">⚠ Nyt ID <?= (int)$id ?> på kanalen – tilknyttes automatisk, når det gamle er tavst</div>
         <?php endforeach; ?>
 
         <?php if ($lt && $lt['temperature'] !== null && $r['temperatur'] !== null):
@@ -252,6 +262,9 @@ $RUMSIDE = '/temperatur/rum_temperatur.php';
               <?php else: ?>–<?php endif; ?>
             </td>
             <td class="tal"><?= $holdt !== null ? $holdt . ' dage' : '–' ?></td>
+            <?php if (!empty($b['auto'])): ?>
+            <td colspan="2" class="opdateret" title="Nexus-målere skifter radio-ID ved batteriskift; det nye ID registreres og tilknyttes automatisk">automatisk (nyt radio-ID)</td>
+            <?php else: ?>
             <td>
               <form method="post" action="batteri.php" class="skift-form">
                 <input type="hidden" name="maaler" value="<?= h($b['noegle']) ?>">
@@ -270,6 +283,7 @@ $RUMSIDE = '/temperatur/rum_temperatur.php';
                 </form>
               <?php endif; ?>
             </td>
+            <?php endif; ?>
           </tr>
         <?php endforeach; ?>
       </tbody>

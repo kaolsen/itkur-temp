@@ -553,6 +553,26 @@ Require ip 192.168.1.0/24
 
 ---
 
+## Radiomålerne (Nexus) – sensor og radio-ID
+
+Nexus-termometrene vælger et nyt tilfældigt radio-ID, hver gang batteriet skiftes. Siden 31. okt 2026 er de normaliseret i databasen `vejrdata`:
+
+| Tabel | Indhold |
+|---|---|
+| `radio_sensor` | Stamtabel – én række pr. fysisk måler med fast `sensor_id`, navn, kanal |
+| `radio_id` | Radio-ID'er over tid: `kanal`, `enhed_id`, `sensor_id` (NULL = ukendt), `gyldig_fra` |
+| `nexus` | Målinger med `radio_id` (FK) – kanal/enhed_id står kun i `radio_id` |
+| `nexus_maaling` | View: målinger + sensor |
+
+- **Batteriskift = `gyldig_fra`** på målerens nyeste radio-ID. Batterioversigten viser det automatisk; der skal ikke trykkes "Skiftet" for Nexus.
+- **Genbrug af ID:** samme ID set igen efter mere end 48 timer bliver en ny række i `radio_id`.
+- **Automatisk tilknytning** (`vejr_collect.py`, `RadioRegister.tilknyt_nye`): når en målers nuværende ID har været tavst i 15 min, og præcis ét ukendt ID på samme kanal er startet efter det og har sendt mindst 3 målinger inden for 15 min, knyttes det til måleren. Er der flere kandidater, logges en advarsel, og det rigtige tilknyttes manuelt (SQL vises på rumsiden):
+  ```sql
+  UPDATE radio_id SET sensor_id = <sensor_id>, tilknyttet = NOW(), note = 'manuelt tilknyttet' WHERE radio_id = <radio_id>;
+  ```
+- **Migrering:** `sql/radio_sensor_trin1.sql` (nye tabeller, data flyttet, gamle kolonner NULL-bare) og `sql/radio_sensor_trin2.sql` (fjerner `nexus.kanal/enhed_id`, omdøber `nexus_placering` til `nexus_placering_gammel`).
+- Rumsiden `temperatur/rum_temperatur.php` ligger i dette repo (symlink fra `/var/www/html/temperatur/`).
+
 ## 9. Driftsopgaver
 
 ### Tilføj en ny måler

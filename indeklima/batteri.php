@@ -1,7 +1,7 @@
 <?php
 /**
  * Registrér eller fortryd et batteriskift.
- * POST fra index.php: maaler (lt:<id> | nexus:<kanal> | vevor), dato (Y-m-d), handling (skift | fortryd)
+ * POST fra index.php: maaler (lt:<id> | vevor), dato (Y-m-d), handling (skift | fortryd)
  * Kræver login (SSO), så kun du kan ændre data, selv om oversigten er offentlig.
  *
  * Bemærk: db.php må IKKE indlæses her. auth_check.php definerer selv DB_HOST,
@@ -50,7 +50,7 @@ $maaler   = trim((string)($_POST['maaler'] ?? ''));
 $handling = $_POST['handling'] ?? 'skift';
 $dato     = trim((string)($_POST['dato'] ?? date('Y-m-d')));
 
-if (!preg_match('/^(lt:\d{1,6}|nexus:\d{1,2}|vevor)$/', $maaler)) {
+if (!preg_match('/^(lt:\d{1,6}|vevor)$/', $maaler)) {   // Nexus registreres automatisk via radio_id
     batteri_fejl(400, 'Ugyldig måler.');
 }
 

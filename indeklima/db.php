@@ -135,29 +135,31 @@ function vejr_status(?int $min, $batteri_ok, bool $ukendt_id): string
 }
 
 /**
- * Nexus-rummene (kun registrerede ID'er) og udedelen fra Vevor.
+ * Nexus-målerne (radio_sensor) og udedelen fra Vevor.
+ * En måler kendes på sit faste sensor_id; radio-ID'et skifter ved batteriskift
+ * (radio_id-tabellen). Ukendte = radio-ID'er på en målers kanal, som endnu ikke
+ * er knyttet til en sensor (nyt batteri, støj eller en nabo).
  * Returnerer ['rum' => [...], 'ude' => [...] | null]
  */
 function hent_vejr_maalere(): array
 {
     $pdo = vejr_db();
 
-    $kanaler = $pdo->query(
-        "SELECT kanal, MAX(placering) AS placering
-         FROM nexus_placering
-         GROUP BY kanal
-         ORDER BY kanal"
+    $sensorer = $pdo->query(
+        "SELECT sensor_id, navn, kanal FROM radio_sensor
+         WHERE type = 'nexus' AND aktiv = 1
+         ORDER BY sortering, kanal"
     )->fetchAll();
 
-    // Ukendte ID'er på kendte kanaler (filtrerer enkeltstående radiostøj fra)
+    // Ukendte radio-ID'er på målernes kanaler med nok målinger til ikke at være støj
     $stmt = $pdo->prepare(
-        "SELECT n.kanal, n.enhed_id, COUNT(*) AS antal
-         FROM nexus n
-         LEFT JOIN nexus_placering p ON p.kanal = n.kanal AND p.enhed_id = n.enhed_id
-         WHERE n.tidspunkt >= NOW() - INTERVAL " . UKENDT_VINDUE_TIMER . " HOUR
-           AND p.enhed_id IS NULL
-           AND n.kanal IN (SELECT kanal FROM nexus_placering)
-         GROUP BY n.kanal, n.enhed_id
+        "SELECT r.kanal, r.enhed_id, COUNT(*) AS antal
+         FROM radio_id r
+         JOIN nexus n ON n.radio_id = r.radio_id
+         WHERE r.type = 'nexus' AND r.sensor_id IS NULL
+           AND n.tidspunkt >= NOW() - INTERVAL " . UKENDT_VINDUE_TIMER . " HOUR
+           AND r.kanal IN (SELECT kanal FROM radio_sensor WHERE type = 'nexus' AND aktiv = 1)
+         GROUP BY r.radio_id, r.kanal, r.enhed_id
          HAVING COUNT(*) >= ?"
     );
     $stmt->execute([UKENDT_MIN_ANTAL]);
@@ -166,31 +168,42 @@ function hent_vejr_maalere(): array
         $ukendte[(int)$u['kanal']][] = (int)$u['enhed_id'];
     }
 
+    // Målerens to seneste radio-ID'er: nuværende (batteriet) og forrige
+    $radioer = $pdo->prepare(
+        "SELECT radio_id, enhed_id, gyldig_fra FROM radio_id
+         WHERE sensor_id = ? ORDER BY gyldig_fra DESC LIMIT 2"
+    );
     $seneste = $pdo->prepare(
-        "SELECT n.tidspunkt, n.temperatur, n.luftfugtighed, n.batteri_ok, n.enhed_id,
-                TIMESTAMPDIFF(MINUTE, n.tidspunkt, NOW()) AS min_siden
-         FROM nexus n
-         JOIN nexus_placering p ON p.kanal = n.kanal AND p.enhed_id = n.enhed_id
-         WHERE n.kanal = ?
-         ORDER BY n.tidspunkt DESC
-         LIMIT 1"
+        "SELECT tidspunkt, temperatur, luftfugtighed, batteri_ok,
+                TIMESTAMPDIFF(MINUTE, tidspunkt, NOW()) AS min_siden
+         FROM nexus WHERE radio_id = ?
+         ORDER BY tidspunkt DESC LIMIT 1"
     );
 
     $rum = [];
-    foreach ($kanaler as $k) {
-        $kanal = (int)$k['kanal'];
-        $seneste->execute([$kanal]);
-        $a = $seneste->fetch() ?: [];
+    foreach ($sensorer as $s) {
+        $kanal = (int)$s['kanal'];
+        $radioer->execute([(int)$s['sensor_id']]);
+        $rr  = $radioer->fetchAll();
+        $nu  = $rr[0] ?? null;
+        $a   = [];
+        if ($nu) {
+            $seneste->execute([(int)$nu['radio_id']]);
+            $a = $seneste->fetch() ?: [];
+        }
 
         $r = [
+            'sensor_id'     => (int)$s['sensor_id'],
             'kanal'         => $kanal,
-            'placering'     => $k['placering'],
+            'placering'     => $s['navn'],
             'temperatur'    => $a['temperatur'] ?? null,
             'luftfugtighed' => $a['luftfugtighed'] ?? null,
             'batteri_ok'    => $a['batteri_ok'] ?? null,
-            'enhed_id'      => $a['enhed_id'] ?? null,
+            'enhed_id'      => $nu['enhed_id'] ?? null,
             'min_siden'     => isset($a['min_siden']) ? (int)$a['min_siden'] : null,
             'ukendte'       => $ukendte[$kanal] ?? [],
+            'batteri_fra'   => $nu['gyldig_fra'] ?? null,        // nuværende radio-ID startede = batteriskift
+            'forrige_fra'   => $rr[1]['gyldig_fra'] ?? null,
         ];
         $r['status'] = vejr_status($r['min_siden'], $r['batteri_ok'], (bool)$r['ukendte']);
         $rum[] = $r;
@@ -215,7 +228,7 @@ function hent_vejr_maalere(): array
 
 /**
  * Batteriskift for alle målere: [maaler => ['seneste' => 'Y-m-d', 'forrige' => 'Y-m-d'|null, 'antal' => n]]
- * maaler-nøgler: lt:<sensors.id>, nexus:<kanal>, vevor
+ * maaler-nøgler: lt:<sensors.id>, vevor  (Nexus registreres automatisk via radio_id)
  */
 function hent_batteriskift(): array
 {
@@ -245,13 +258,13 @@ function dage_mellem(?string $fra, ?string $til): ?int
 /** Gyldig målernøgle? */
 function gyldig_maaler(string $m): bool
 {
-    return (bool)preg_match('/^(lt:\d{1,6}|nexus:\d{1,2}|vevor)$/', $m);
+    return (bool)preg_match('/^(lt:\d{1,6}|vevor)$/', $m);
 }
 
 /**
  * Første måling fra hver måler – hvor længe den har sendt data.
- * Nexus- og Vevor-målere skifter radio-ID, når batteriet skiftes, så for dem er
- * det første måling med det NUVÆRENDE ID, dvs. reelt hvornår batteriet kom i.
+ * Nexus: gyldig_fra for målerens nuværende radio-ID (= batteriskiftet).
+ * Vevor: første måling med det nuværende ID (skifter også ID ved batteriskift).
  * LT_-målerne har fast MAC, så for dem er det blot første måling i databasen.
  * Returnerer [maaler-nøgle => 'Y-m-d H:i:s']
  */
@@ -263,14 +276,11 @@ function hent_foerste_maaling(array $maalere, array $vejr): array
         $ud['lt:' . (int)$r['sensor_id']] = $r['f'];
     }
 
-    $v = vejr_db();
-    $nx = $v->prepare("SELECT MIN(tidspunkt) FROM nexus WHERE kanal = ? AND enhed_id = ?");
     foreach ($vejr['rum'] as $r) {
-        if ($r['enhed_id'] === null) continue;
-        $nx->execute([(int)$r['kanal'], (int)$r['enhed_id']]);
-        if ($f = $nx->fetchColumn()) $ud['nexus:' . (int)$r['kanal']] = $f;
+        if (!empty($r['batteri_fra'])) $ud['radio:' . (int)$r['sensor_id']] = $r['batteri_fra'];
     }
 
+    $v = vejr_db();
     if (!empty($vejr['ude'])) {
         $f = $v->query(
             "SELECT MIN(tidspunkt) FROM vevor
