@@ -29,6 +29,13 @@ try {
 }
 $idag = date('Y-m-d');
 
+// Første måling fra hver måler (fallback for batteriets alder, når intet skift er registreret)
+try {
+    $foerste = hent_foerste_maaling($maalere, $vejr);
+} catch (Throwable $e) {
+    $foerste = [];
+}
+
 // Alle målere med batteri, i samme rækkefølge som kortene
 $batterier = [];
 foreach ($maalere as $m) {
@@ -221,18 +228,29 @@ $RUMSIDE = '/temperatur/rum_temperatur.php';
   <div class="panel tabel-wrap">
     <table class="batteri-tabel">
       <thead>
-        <tr><th>Måler</th><th>Type</th><th>Skiftet</th><th>Alder</th><th>Forrige holdt</th><th>Registrér skift</th><th></th></tr>
+        <tr><th>Måler</th><th>Type</th><th title="Første måling fra sensoren. Nexus/Vevor skifter ID ved batteriskift, så for dem er det reelt hvornår batteriet kom i">Første måling</th><th>Skiftet</th><th>Batteriets alder</th><th>Forrige holdt</th><th>Registrér skift</th><th></th></tr>
       </thead>
       <tbody>
         <?php foreach ($batterier as $b):
             $k = $skift[$b['noegle']] ?? null;
             $holdt = $k ? dage_mellem($k['forrige'], $k['seneste']) : null;
+            $f = $foerste[$b['noegle']] ?? null;
+            $f_dato = $f ? substr($f, 0, 10) : null;
+            // Batteriet er fra det seneste registrerede skift – ellers mindst fra første måling
+            $fra = $k['seneste'] ?? $f_dato;
         ?>
           <tr>
             <td><?= h($b['navn']) ?></td>
             <td class="opdateret"><?= h($b['type']) ?></td>
+            <td><?= $f_dato ? date('d.m.Y', strtotime($f_dato)) : '–' ?></td>
             <td><?= $k ? date('d.m.Y', strtotime($k['seneste'])) : '–' ?></td>
-            <td class="tal"><?= $k ? dage_mellem($k['seneste'], $idag) . ' dage' : '–' ?></td>
+            <td class="tal">
+              <?php if ($k): ?>
+                <?= dage_mellem($fra, $idag) ?> dage
+              <?php elseif ($fra): ?>
+                <span class="opdateret" title="Intet skift registreret – regnet fra første måling, så batteriet kan være ældre">≥ <?= dage_mellem($fra, $idag) ?> dage</span>
+              <?php else: ?>–<?php endif; ?>
+            </td>
             <td class="tal"><?= $holdt !== null ? $holdt . ' dage' : '–' ?></td>
             <td>
               <form method="post" action="batteri.php" class="skift-form">

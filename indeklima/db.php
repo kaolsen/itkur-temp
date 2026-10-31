@@ -248,3 +248,36 @@ function gyldig_maaler(string $m): bool
     return (bool)preg_match('/^(lt:\d{1,6}|nexus:\d{1,2}|vevor)$/', $m);
 }
 
+/**
+ * Første måling fra hver måler – hvor længe den har sendt data.
+ * Nexus- og Vevor-målere skifter radio-ID, når batteriet skiftes, så for dem er
+ * det første måling med det NUVÆRENDE ID, dvs. reelt hvornår batteriet kom i.
+ * LT_-målerne har fast MAC, så for dem er det blot første måling i databasen.
+ * Returnerer [maaler-nøgle => 'Y-m-d H:i:s']
+ */
+function hent_foerste_maaling(array $maalere, array $vejr): array
+{
+    $ud = [];
+    $lt = db()->query("SELECT sensor_id, MIN(measured_at) AS f FROM measurements GROUP BY sensor_id");
+    foreach ($lt as $r) {
+        $ud['lt:' . (int)$r['sensor_id']] = $r['f'];
+    }
+
+    $v = vejr_db();
+    $nx = $v->prepare("SELECT MIN(tidspunkt) FROM nexus WHERE kanal = ? AND enhed_id = ?");
+    foreach ($vejr['rum'] as $r) {
+        if ($r['enhed_id'] === null) continue;
+        $nx->execute([(int)$r['kanal'], (int)$r['enhed_id']]);
+        if ($f = $nx->fetchColumn()) $ud['nexus:' . (int)$r['kanal']] = $f;
+    }
+
+    if (!empty($vejr['ude'])) {
+        $f = $v->query(
+            "SELECT MIN(tidspunkt) FROM vevor
+             WHERE enhed_id = (SELECT enhed_id FROM vevor ORDER BY tidspunkt DESC LIMIT 1)"
+        )->fetchColumn();
+        if ($f) $ud['vevor'] = $f;
+    }
+    return $ud;
+}
+
