@@ -19,6 +19,36 @@ try {
 }
 $ude = $vejr['ude'];
 
+// Batteriskift (tabellen findes først efter sql/opgradering_batteriskift.sql)
+try {
+    $skift = hent_batteriskift();
+    $skift_fejl = null;
+} catch (Throwable $e) {
+    $skift = [];
+    $skift_fejl = $e->getMessage();
+}
+$idag = date('Y-m-d');
+
+// Alle målere med batteri, i samme rækkefølge som kortene
+$batterier = [];
+foreach ($maalere as $m) {
+    $batterier[] = ['noegle' => 'lt:' . (int)$m['id'], 'navn' => $m['name'], 'type' => $m['bluetooth_name'] ?: 'LT'];
+}
+foreach ($vejr['rum'] as $r) {
+    $batterier[] = ['noegle' => 'nexus:' . (int)$r['kanal'], 'navn' => $r['placering'], 'type' => 'Nexus kanal ' . (int)$r['kanal']];
+}
+if ($ude) {
+    $batterier[] = ['noegle' => 'vevor', 'navn' => 'Ude', 'type' => 'Vevor udedel'];
+}
+
+/** Kort tekst til kortene: "Batteri 12.10 (19 dage)" */
+function batteri_tekst(array $skift, string $noegle, string $idag): string
+{
+    if (empty($skift[$noegle])) return '';
+    $s = $skift[$noegle]['seneste'];
+    return 'Batteri skiftet ' . date('d.m.y', strtotime($s)) . ' (' . dage_mellem($s, $idag) . ' dage)';
+}
+
 $statustekst = [
     'ok'      => 'Forbundet',
     'batteri' => 'Skift batteri snart',
@@ -92,6 +122,7 @@ $RUMSIDE = '/temperatur/rum_temperatur.php';
             <span class="bat" title="Batteri"><span class="bat-bar"><span class="bat-fyld" style="width:<?= (int)$m['battery'] ?>%"></span></span><?= (int)$m['battery'] ?> %</span>
           <?php endif; ?>
         </div>
+        <?php if ($t = batteri_tekst($skift, 'lt:' . (int)$m['id'], $idag)): ?><div class="bat-alder"><?= h($t) ?></div><?php endif; ?>
       </a>
     <?php endforeach; ?>
   </section>
@@ -117,6 +148,7 @@ $RUMSIDE = '/temperatur/rum_temperatur.php';
           <span>Målt <?= siden($r['min_siden']) ?></span>
           <?php if ($r['enhed_id'] !== null): ?><span>id <?= (int)$r['enhed_id'] ?></span><?php endif; ?>
         </div>
+        <?php if ($t = batteri_tekst($skift, 'nexus:' . (int)$r['kanal'], $idag)): ?><div class="bat-alder"><?= h($t) ?></div><?php endif; ?>
 
         <?php if ($r['status'] === 'ukendt'): ?>
           <div class="advarsel">Ingen målinger fra kendte ID'er</div>
@@ -151,6 +183,7 @@ $RUMSIDE = '/temperatur/rum_temperatur.php';
         <div class="meta">
           <span>Målt <?= siden($ude['min_siden']) ?></span>
         </div>
+        <?php if ($t = batteri_tekst($skift, 'vevor', $idag)): ?><div class="bat-alder"><?= h($t) ?></div><?php endif; ?>
         <?php if ($ude['status'] === 'mistet'): ?>
           <div class="advarsel">⚠ Tavs i <?= siden($ude['min_siden']) ?></div>
         <?php elseif ($ude['batteri_ok'] !== null && (int)$ude['batteri_ok'] === 0): ?>
@@ -175,6 +208,50 @@ $RUMSIDE = '/temperatur/rum_temperatur.php';
             <td class="tal"><?= $m['battery'] !== null ? (int)$m['battery'] . ' %' : '–' ?></td>
             <td><?= siden($m['min_siden_kontakt'] !== null ? (int)$m['min_siden_kontakt'] : null) ?></td>
             <td><?= siden($m['min_siden_maaling'] !== null ? (int)$m['min_siden_maaling'] : null) ?></td>
+          </tr>
+        <?php endforeach; ?>
+      </tbody>
+    </table>
+  </div>
+
+  <h2 id="batterier">Batterier <span class="opdateret">registrér et skift, når du skifter batteri (kræver login)</span></h2>
+  <?php if ($skift_fejl): ?>
+    <p class="fejl">Batteriskift kan ikke vises: <?= h($skift_fejl) ?> – er sql/opgradering_batteriskift.sql kørt?</p>
+  <?php endif; ?>
+  <div class="panel tabel-wrap">
+    <table class="batteri-tabel">
+      <thead>
+        <tr><th>Måler</th><th>Type</th><th>Skiftet</th><th>Alder</th><th>Forrige holdt</th><th>Registrér skift</th><th></th></tr>
+      </thead>
+      <tbody>
+        <?php foreach ($batterier as $b):
+            $k = $skift[$b['noegle']] ?? null;
+            $holdt = $k ? dage_mellem($k['forrige'], $k['seneste']) : null;
+        ?>
+          <tr>
+            <td><?= h($b['navn']) ?></td>
+            <td class="opdateret"><?= h($b['type']) ?></td>
+            <td><?= $k ? date('d.m.Y', strtotime($k['seneste'])) : '–' ?></td>
+            <td class="tal"><?= $k ? dage_mellem($k['seneste'], $idag) . ' dage' : '–' ?></td>
+            <td class="tal"><?= $holdt !== null ? $holdt . ' dage' : '–' ?></td>
+            <td>
+              <form method="post" action="batteri.php" class="skift-form">
+                <input type="hidden" name="maaler" value="<?= h($b['noegle']) ?>">
+                <input type="hidden" name="handling" value="skift">
+                <input type="date" name="dato" value="<?= $idag ?>" max="<?= $idag ?>" required>
+                <button type="submit">Skiftet</button>
+              </form>
+            </td>
+            <td>
+              <?php if ($k): ?>
+                <form method="post" action="batteri.php" class="skift-form"
+                      onsubmit="return confirm(<?= h(json_encode('Slet skiftet ' . date('d.m.Y', strtotime($k['seneste'])) . ' for ' . $b['navn'] . '?', JSON_UNESCAPED_UNICODE)) ?>)">
+                  <input type="hidden" name="maaler" value="<?= h($b['noegle']) ?>">
+                  <input type="hidden" name="handling" value="fortryd">
+                  <button type="submit" class="fortryd" title="Slet seneste registrerede skift">Fortryd</button>
+                </form>
+              <?php endif; ?>
+            </td>
           </tr>
         <?php endforeach; ?>
       </tbody>

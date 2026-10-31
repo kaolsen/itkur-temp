@@ -574,6 +574,10 @@ Kortene på `itkur.dk/indeklima` (og målervælgeren under Grafer) sorteres på 
 UPDATE sensors SET sortering = 5 WHERE name = 'Stue';   -- flyt Stue forrest
 ```
 
+### Registrér batteriskift
+
+Nederst på `itkur.dk/indeklima` står sektionen **Batterier** med alle målere: LT_-målerne, Nexus-termometrene og Vevor-udedelen. Vælg dato (standard i dag) og tryk **Skiftet**. **Fortryd** sletter det seneste registrerede skift. Gemmes i tabellen `batteriskift` (én række pr. skift) via `indeklima/batteri.php`, som kræver login. Siden viser seneste skift, alder i dage og hvor længe det forrige batteri holdt – det er det reelle mål for batterilevetid, da LT_-målerne altid melder 90 %.
+
 ### Flyt en måler til en anden gateway
 
 1. `UPDATE sensors SET gateway = '...' WHERE mac_address = '...';`

@@ -99,3 +99,17 @@ td.tal { font-variant-numeric: tabular-nums; text-align: right; }
 .graf { position: relative; height: 320px; }
 .graf + .graf { margin-top: 24px; }
 .tom { color: var(--svag); padding: 40px 0; text-align: center; }
+
+/* Batteriskift */
+.bat-alder { font-size: 12px; color: var(--svag); margin-top: 4px; }
+.skift-form { display: inline-flex; gap: 6px; align-items: center; margin: 0; }
+.skift-form input[type=date] {
+  font: inherit; font-size: 13.5px; padding: 4px 8px; border: 1px solid var(--linje);
+  border-radius: 8px; background: var(--kort); color: var(--tekst);
+}
+.skift-form button {
+  font: inherit; font-size: 13.5px; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: #fff;
+}
+.skift-form button.fortryd { background: transparent; color: var(--svag); border-color: var(--linje); }
+

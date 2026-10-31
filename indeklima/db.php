@@ -212,3 +212,39 @@ function hent_vejr_maalere(): array
 
     return ['rum' => $rum, 'ude' => $ude];
 }
+
+/**
+ * Batteriskift for alle målere: [maaler => ['seneste' => 'Y-m-d', 'forrige' => 'Y-m-d'|null, 'antal' => n]]
+ * maaler-nøgler: lt:<sensors.id>, nexus:<kanal>, vevor
+ */
+function hent_batteriskift(): array
+{
+    $rows = db()->query(
+        "SELECT maaler, skiftet FROM batteriskift ORDER BY maaler, skiftet DESC"
+    )->fetchAll();
+    $ud = [];
+    foreach ($rows as $r) {
+        $m = $r['maaler'];
+        if (!isset($ud[$m])) {
+            $ud[$m] = ['seneste' => $r['skiftet'], 'forrige' => null, 'antal' => 0];
+        } elseif ($ud[$m]['forrige'] === null) {
+            $ud[$m]['forrige'] = $r['skiftet'];
+        }
+        $ud[$m]['antal']++;
+    }
+    return $ud;
+}
+
+/** Dage mellem to datoer (Y-m-d); null hvis en mangler. */
+function dage_mellem(?string $fra, ?string $til): ?int
+{
+    if (!$fra || !$til) return null;
+    return (int)(new DateTime($fra))->diff(new DateTime($til))->days;
+}
+
+/** Gyldig målernøgle? */
+function gyldig_maaler(string $m): bool
+{
+    return (bool)preg_match('/^(lt:\d{1,6}|nexus:\d{1,2}|vevor)$/', $m);
+}
+
