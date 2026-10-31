@@ -18,3 +18,6 @@ INSERT INTO batteriskift (maaler, skiftet)
 SELECT CONCAT('lt:', id), '2026-10-28' FROM sensors
 WHERE mac_address = 'F0:B9:6A:D2:B2:0E'
   AND NOT EXISTS (SELECT 1 FROM batteriskift WHERE maaler = CONCAT('lt:', sensors.id));
+
+-- Webbrugeren skal kunne læse, registrere og fortryde skift
+GRANT SELECT, INSERT, DELETE ON environment.batteriskift TO 'lt_b112'@'localhost';
